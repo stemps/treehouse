@@ -1,17 +1,25 @@
 # Treehouse
 
-`treehouse` assigns a stable number to each Git worktree, so you can use this
-number to derive per-worktree local configuration like ports, database names,
-etc... anything you want isolated per worktree.
+`treehouse` helps you isolate your development environments when using Git
+worktrees.
+
+It assigns a stable number for each worktree, so you can use this number to
+derive per-worktree local configuration like ports, database names, etc... or
+anything you want isolated per worktree.
+
+For example, the command
+
+```bash
+PORT="$(treehouse offset 3000)" npm run dev
+```
+
+will start your dev server on port 3000 on the first worktree, port 3001 on the
+second, etc...
 
 The worktree number is stored in `.treehouse` inside the worktree's local Git
 metadata directory, as reported by `git rev-parse --git-dir`. For linked
 worktrees this is usually under the repository's common `.git/worktrees/`
 directory, so it is not checked in and is removed with the worktree metadata.
-
-`treehouse init` uses a repo-wide `.treehouse.lock` file in the Git common
-directory while it scans worktrees and writes the assigned number. By default it
-waits up to 10 seconds for the lock.
 
 ## Installation
 
@@ -28,14 +36,6 @@ go install github.com/stemps/treehouse@latest
 ```
 
 ## Usage
-
-```bash
-treehouse init
-treehouse current
-treehouse offset 8080
-```
-
-Example:
 
 ```bash
 $ treehouse init
