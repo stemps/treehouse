@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestInitCurrentAndOffset(t *testing.T) {
@@ -16,6 +17,7 @@ func TestInitCurrentAndOffset(t *testing.T) {
 	assertTreehouseOutput(t, repo, "0\n", "current")
 	assertTreehouseOutput(t, repo, "8080\n", "offset", "8080")
 	assertFileContent(t, storePath(t, repo), "0\n")
+	assertNoFile(t, lockPathForRepo(t, repo))
 }
 
 func TestInitIsIdempotentWithoutForce(t *testing.T) {
@@ -55,6 +57,37 @@ func TestCurrentRequiresInit(t *testing.T) {
 	}
 	if !strings.Contains(result.stderr, "not initialized") {
 		t.Fatalf("expected not initialized error, got stderr:\n%s", result.stderr)
+	}
+}
+
+func TestInitTimesOutWhenLockIsHeld(t *testing.T) {
+	repo := initRepo(t)
+	lock := lockPathForRepo(t, repo)
+
+	if err := os.WriteFile(lock, []byte("held by test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	originalWorkingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(repo); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(originalWorkingDir); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	_, err = acquireInitLock(10 * time.Millisecond)
+
+	if err == nil {
+		t.Fatal("expected init to fail while lock is held")
+	}
+	if !strings.Contains(err.Error(), "timed out waiting for init lock") {
+		t.Fatalf("expected lock timeout error, got: %v", err)
 	}
 }
 
@@ -152,6 +185,19 @@ func storePath(t *testing.T, cwd string) string {
 	t.Helper()
 	gitDir := gitCommand(t, cwd, "rev-parse", "--path-format=absolute", "--git-dir")
 	return filepath.Join(gitDir, ".treehouse")
+}
+
+func lockPathForRepo(t *testing.T, cwd string) string {
+	t.Helper()
+	gitDir := gitCommand(t, cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	return filepath.Join(gitDir, ".treehouse.lock")
+}
+
+func assertNoFile(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expected %s not to exist, stat err: %v", path, err)
+	}
 }
 
 func assertFileContent(t *testing.T, path string, expected string) {

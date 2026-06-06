@@ -10,9 +10,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const storeFilename = ".treehouse"
+const lockFilename = ".treehouse.lock"
+
+const defaultLockTimeout = 10 * time.Second
+const lockRetryInterval = 50 * time.Millisecond
 
 type worktree struct {
 	path   string
@@ -109,6 +114,20 @@ func initNumber(force bool, selected *int) (int, error) {
 		}
 	}
 
+	release, err := acquireInitLock(defaultLockTimeout)
+	if err != nil {
+		return 0, err
+	}
+	defer release()
+
+	if !force {
+		if _, err := os.Stat(store); err == nil {
+			return readNumberFile(store)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return 0, fmt.Errorf("could not stat %s: %w", store, err)
+		}
+	}
+
 	number := 0
 	if selected != nil {
 		number = *selected
@@ -124,6 +143,46 @@ func initNumber(force bool, selected *int) (int, error) {
 		return 0, fmt.Errorf("could not write %s: %w", store, err)
 	}
 	return number, nil
+}
+
+func acquireInitLock(timeout time.Duration) (func(), error) {
+	path, err := lockPath()
+	if err != nil {
+		return nil, err
+	}
+
+	deadline := time.Now().Add(timeout)
+	for {
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			content := fmt.Sprintf("pid=%d\ncreated_at=%s\n", os.Getpid(), time.Now().Format(time.RFC3339Nano))
+			if _, writeErr := file.WriteString(content); writeErr != nil {
+				_ = file.Close()
+				_ = os.Remove(path)
+				return nil, fmt.Errorf("could not write lock %s: %w", path, writeErr)
+			}
+			if closeErr := file.Close(); closeErr != nil {
+				_ = os.Remove(path)
+				return nil, fmt.Errorf("could not close lock %s: %w", path, closeErr)
+			}
+			return func() {
+				_ = os.Remove(path)
+			}, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return nil, fmt.Errorf("could not create lock %s: %w", path, err)
+		}
+
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, fmt.Errorf("timed out waiting for init lock %s", path)
+		}
+		sleepFor := lockRetryInterval
+		if remaining < sleepFor {
+			sleepFor = remaining
+		}
+		time.Sleep(sleepFor)
+	}
 }
 
 func readCurrentNumber() (int, error) {
@@ -178,6 +237,18 @@ func currentStorePath() (string, error) {
 
 func currentGitDir() (string, error) {
 	return gitPath("rev-parse", "--path-format=absolute", "--git-dir")
+}
+
+func lockPath() (string, error) {
+	gitDir, err := commonGitDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(gitDir, lockFilename), nil
+}
+
+func commonGitDir() (string, error) {
+	return gitPath("rev-parse", "--path-format=absolute", "--git-common-dir")
 }
 
 func listWorktrees() ([]worktree, error) {

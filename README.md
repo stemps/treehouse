@@ -9,6 +9,10 @@ metadata directory, as reported by `git rev-parse --git-dir`. For linked
 worktrees this is usually under the repository's common `.git/worktrees/`
 directory, so it is not checked in and is removed with the worktree metadata.
 
+`treehouse init` uses a repo-wide `.treehouse.lock` file in the Git common
+directory while it scans worktrees and writes the assigned number. By default it
+waits up to 10 seconds for the lock.
+
 ## Usage
 
 ```bash
