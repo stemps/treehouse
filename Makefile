@@ -3,7 +3,7 @@ GOCACHE ?= $(CURDIR)/.cache/go-build
 GOFILES := $(shell find . -name '*.go' -not -path './vendor/*')
 export GOCACHE
 
-.PHONY: format format-check lint test check build clean
+.PHONY: format format-check lint test check build clean release
 
 format:
 	gofmt -w $(GOFILES)
@@ -25,6 +25,9 @@ check: format-check lint test
 
 build:
 	go build -o $(BINARY) .
+
+release:
+	scripts/create-release.sh
 
 clean:
 	rm -rf $(BINARY) $(BINARY).exe .cache

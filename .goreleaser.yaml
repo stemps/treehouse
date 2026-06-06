@@ -1,0 +1,67 @@
+version: 2
+
+project_name: treehouse
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: treehouse
+    main: .
+    binary: treehouse
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: treehouse
+    ids:
+      - treehouse
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+brews:
+  - name: treehouse
+    ids:
+      - treehouse
+    repository:
+      owner: stemps
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    skip_upload: auto
+    commit_author:
+      name: release-bot
+      email: release-bot@users.noreply.github.com
+    commit_msg_template: "Update treehouse formula to {{ .Tag }}"
+    homepage: "https://github.com/stemps/treehouse"
+    description: "Assign stable numbers to Git worktrees"
+    install: |
+      bin.install "treehouse"
+    test: |
+      system "#{bin}/treehouse", "--help"

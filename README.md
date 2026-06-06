@@ -13,6 +13,20 @@ directory, so it is not checked in and is removed with the worktree metadata.
 directory while it scans worktrees and writes the assigned number. By default it
 waits up to 10 seconds for the lock.
 
+## Installation
+
+With Homebrew:
+
+```bash
+brew install stemps/tap/treehouse
+```
+
+With Go:
+
+```bash
+go install github.com/stemps/treehouse@latest
+```
+
 ## Usage
 
 ```bash
@@ -88,3 +102,29 @@ docker run --rm -p "$(treehouse offset 8080):80" nginx
 go test ./...
 go build -o treehouse .
 ```
+
+## Release
+
+Releases are created from `main` with:
+
+```bash
+brew install semver
+make release
+```
+
+The release task asks for a version number, writes it to `VERSION`, commits that
+change, creates an annotated tag like `v0.1.0`, and pushes the commit and tag.
+The tag triggers GitHub Actions to publish release artifacts and update
+`stemps/homebrew-tap`.
+
+`VERSION` starts at `0.0.0`; enter `0.1.0` when cutting the first public
+release. After that, `make release` defaults to the next patch version. Release
+versions may use full SemVer syntax, such as `0.2.0-alpha.1`, but should be
+entered without the leading `v`.
+
+Go install users can request prereleases explicitly, for example
+`go install github.com/stemps/treehouse@v0.2.0-alpha.1`. `@latest` generally
+prefers stable releases over prereleases.
+
+The `stemps/treehouse` repository needs a `HOMEBREW_TAP_GITHUB_TOKEN` secret
+with contents write access to `stemps/homebrew-tap`.
