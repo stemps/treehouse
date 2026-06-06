@@ -10,3 +10,5 @@ dist/
 *.egg-info/
 /treehouse
 /treehouse.exe
+.codex/
+.claude/
