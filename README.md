@@ -44,6 +44,8 @@ $ treehouse current
 0  # outputs the current worktree's number
 $ treehouse offset 8080
 8080  # increments the given number by the worktree's number
+$ ./treehouse run sh -c 'echo "This is worktree $WORKTREE_NUMBER"'
+This is worktree 0  # runs a command with WORKTREE_NUMBER set
 ```
 
 In another worktree:
@@ -55,6 +57,8 @@ $ treehouse current
 1
 $ treehouse offset 8080
 8081
+$ ./treehouse run sh -c 'echo "This is worktree $WORKTREE_NUMBER"'
+This is worktree 1
 ```
 
 ### Typical Setups
@@ -85,6 +89,12 @@ Docker published port:
 docker run --rm -p "$(treehouse offset 8080):80" nginx
 ```
 
+Node app with worktree-aware configuration:
+
+```bash
+treehouse run npm run dev
+```
+
 ## All Commands
 
 - `treehouse init`: assign the lowest unused non-negative worktree number.
@@ -92,9 +102,11 @@ docker run --rm -p "$(treehouse offset 8080):80" nginx
 - `treehouse init --force`: replace an existing stored number.
 - `treehouse current`: print the current worktree number.
 - `treehouse offset <base>`: print `<base> + current worktree number`.
+- `treehouse run <command>`: run `<command>` with `WORKTREE_NUMBER` set to
+  the current worktree number.
 
-`current` and `offset` fail if the worktree has not been initialized. Use
-`treehouse init` first.
+`current`, `offset`, and `run` fail if the worktree has not been initialized.
+Use `treehouse init` first.
 
 ## Development
 

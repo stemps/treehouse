@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +28,34 @@ func TestInitIsIdempotentWithoutForce(t *testing.T) {
 	assertTreehouseOutput(t, repo, "4\n", "init", "--set", "4")
 	assertTreehouseOutput(t, repo, "4\n", "init", "--set", "8")
 	assertTreehouseOutput(t, repo, "8\n", "init", "--set", "8", "--force")
+}
+
+func TestRunSetsWorktreeNumberEnv(t *testing.T) {
+	repo := initRepo(t)
+
+	assertTreehouseOutput(t, repo, "4\n", "init", "--set", "4")
+	assertTreehouseOutput(t, repo, "4\n", append([]string{"run"}, shellPrintWorktreeNumberArgs()...)...)
+}
+
+func TestRunAcceptsOptionalCommandSeparator(t *testing.T) {
+	repo := initRepo(t)
+
+	assertTreehouseOutput(t, repo, "2\n", "init", "--set", "2")
+	assertTreehouseOutput(t, repo, "2\n", append([]string{"run", "--"}, shellPrintWorktreeNumberArgs()...)...)
+}
+
+func TestRunPropagatesCommandExitCode(t *testing.T) {
+	repo := initRepo(t)
+
+	assertTreehouseOutput(t, repo, "0\n", "init")
+	result := runTreehouse(t, repo, append([]string{"run"}, shellExitArgs(7)...)...)
+
+	if code := exitCode(result.err); code != 7 {
+		t.Fatalf("exit code = %d, want 7\nstdout:\n%s\nstderr:\n%s", code, result.stdout, result.stderr)
+	}
+	if result.stderr != "" {
+		t.Fatalf("expected no treehouse stderr for child exit, got:\n%s", result.stderr)
+	}
 }
 
 func TestInitUsesLowestAvailableNumberAcrossWorktrees(t *testing.T) {
@@ -54,6 +84,22 @@ func TestCurrentRequiresInit(t *testing.T) {
 
 	if result.err == nil {
 		t.Fatal("expected current to fail before init")
+	}
+	if !strings.Contains(result.stderr, "not initialized") {
+		t.Fatalf("expected not initialized error, got stderr:\n%s", result.stderr)
+	}
+}
+
+func TestRunRequiresInit(t *testing.T) {
+	repo := initRepo(t)
+
+	result := runTreehouse(t, repo, append([]string{"run"}, shellPrintTextArgs("should-not-run")...)...)
+
+	if result.err == nil {
+		t.Fatal("expected run to fail before init")
+	}
+	if result.stdout != "" {
+		t.Fatalf("expected command not to run, got stdout:\n%s", result.stdout)
 	}
 	if !strings.Contains(result.stderr, "not initialized") {
 		t.Fatalf("expected not initialized error, got stderr:\n%s", result.stderr)
@@ -157,6 +203,38 @@ func buildTestBinary(t *testing.T) string {
 	}
 	testBinary = binary
 	return testBinary
+}
+
+func shellPrintWorktreeNumberArgs() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"cmd", "/C", "echo %WORKTREE_NUMBER%"}
+	}
+	return []string{"sh", "-c", "printf '%s\n' \"$WORKTREE_NUMBER\""}
+}
+
+func shellPrintTextArgs(text string) []string {
+	if runtime.GOOS == "windows" {
+		return []string{"cmd", "/C", "echo " + text}
+	}
+	return []string{"sh", "-c", "printf '%s' '" + text + "'"}
+}
+
+func shellExitArgs(code int) []string {
+	if runtime.GOOS == "windows" {
+		return []string{"cmd", "/C", fmt.Sprintf("exit /B %d", code)}
+	}
+	return []string{"sh", "-c", fmt.Sprintf("exit %d", code)}
+}
+
+func exitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) {
+		return exitError.ExitCode()
+	}
+	return -1
 }
 
 func initRepo(t *testing.T) string {

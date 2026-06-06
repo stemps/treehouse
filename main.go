@@ -26,6 +26,10 @@ type worktree struct {
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
+		var exitError *exec.ExitError
+		if errors.As(err, &exitError) {
+			os.Exit(exitError.ExitCode())
+		}
 		fmt.Fprintf(os.Stderr, "treehouse: %v\n", err)
 		os.Exit(1)
 	}
@@ -66,6 +70,8 @@ func run(args []string) error {
 			return err
 		}
 		fmt.Println(base + number)
+	case "run":
+		return runCommand(args[1:])
 	case "-h", "--help", "help":
 		printUsage()
 	default:
@@ -99,6 +105,38 @@ func runInit(args []string) (int, error) {
 	}
 
 	return initNumber(*force, selectedNumber)
+}
+
+func runCommand(args []string) error {
+	if len(args) > 0 && args[0] == "--" {
+		args = args[1:]
+	}
+	if len(args) == 0 {
+		return errors.New("usage: treehouse run [--] <command> [args...]")
+	}
+
+	number, err := readCurrentNumber()
+	if err != nil {
+		return err
+	}
+
+	command := exec.Command(args[0], args[1:]...)
+	command.Env = withEnv(os.Environ(), "WORKTREE_NUMBER", strconv.Itoa(number))
+	command.Stdin = os.Stdin
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	return command.Run()
+}
+
+func withEnv(env []string, key string, value string) []string {
+	prefix := key + "="
+	next := make([]string, 0, len(env)+1)
+	for _, entry := range env {
+		if !strings.HasPrefix(entry, prefix) {
+			next = append(next, entry)
+		}
+	}
+	return append(next, prefix+value)
 }
 
 func initNumber(force bool, selected *int) (int, error) {
@@ -344,10 +382,12 @@ func printUsage() {
   treehouse init [--force] [--set NUMBER]
   treehouse current
   treehouse offset <base>
+  treehouse run [--] <command> [args...]
 
 Commands:
   init      Assign this Git worktree a unique number.
   current   Print this worktree's assigned number.
   offset    Print BASE plus this worktree's assigned number.
+  run       Run COMMAND with WORKTREE_NUMBER set.
 `)
 }
